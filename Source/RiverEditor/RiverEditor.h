@@ -47,20 +47,31 @@ private:
 	// Updates the particle effect based on the river parameters
 	void UpdateVFX();
 
+	void ApplyPostProcessing(std::shared_ptr<Shader> &shader);
+
 	// Basic rendering of objects
-	void RenderMesh(std::shared_ptr<Mesh> &mesh, std::shared_ptr<Shader> &shader, const glm::vec3 &position, const glm::vec3 &scale);
+	void RenderMesh(std::shared_ptr<Mesh> &mesh, std::shared_ptr<Shader> &shader, Texture2D *texture,
+					const glm::vec3 &position, const glm::vec3 &scale);
 
 	// Specific rendering of the curve
 	void RenderRiver(Texture2D *texture);
 
 	// Render water VFX
-	void RenderVFX(std::unique_ptr< ParticleEffect<Particle> > &effect, std::shared_ptr<Shader> &shader, const glm::vec3 &position, const glm::vec3 &scale);
+	void RenderVFX(std::unique_ptr< ParticleEffect<Particle> > &effect, std::shared_ptr<Shader> &shader,
+					const glm::vec3 &position, float deltaTime);
 
 private:
 	// Resource managers
 	std::unordered_map< std::string, std::shared_ptr<Mesh> > meshes;
 	std::unordered_map< std::string, std::shared_ptr<Shader> > shaders;
 	std::unordered_map< std::string, std::shared_ptr<Texture2D> > textures;
+
+	// Post processing
+	bool postProcessOn;
+	std::unique_ptr<FrameBuffer> frameBuffer;
+	std::vector<std::string> postProcessFX;
+	int currentEffect;
+	float waveEffectFrequency;
 
 	// Control points
 	int controlPointsCount;
@@ -72,9 +83,11 @@ private:
 
 	// Particle Effect
 	std::unique_ptr< ParticleEffect<Particle> > splashEffect;
+	glm::vec3 particleFallSpeed;
 
 	// Editing
 	float smoothness;
+	float maxAnimationSpeed;
 
 	// Camera
 	float viewDistance;

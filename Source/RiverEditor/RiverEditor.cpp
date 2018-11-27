@@ -1,14 +1,8 @@
 #include "RiverEditor.h"
+#include "Utils.h"
 
 #include <vector>
 #include <iostream>
-
-#include <Core/Engine.h>
-
-float RandFloat(float min, float max)
-{
-	return min + static_cast <float> (rand()) / static_cast <float> (RAND_MAX / (max - min));
-}
 
 void RiverEditor::DefaultParameters()
 {
@@ -16,25 +10,42 @@ void RiverEditor::DefaultParameters()
 	controlPointsCount = 4;
 	smoothness = 0.5f;
 	animationSpeed = 0.1f;
-	tilingFactor = 3.0f;
+	tilingFactor = 5.0f; 
+	maxAnimationSpeed = 4.0f;
+
+	// VFX
+	particleFallSpeed = glm::vec3(0.0f, -0.9f, 0.0f);
 	
 	// Camera
 	aspectRatio = glm::vec2(16.0f, 9.0f);
 	viewDistance = 100.0f;
 
 	// Mouse picking
-	clickDistanceThreshold = 0.2f;
+	clickDistanceThreshold = 0.4f;
 	selection = -1;
 
 	// Curve generation
 	instanceCount = 1;
 	generatedPoints = 30;
-	riverWidth = 1.0f;
+	riverWidth = 0.75f;
+
+	// Post processing
+	postProcessOn = true;
+	waveEffectFrequency = 16.0f;
 }
 
 void RiverEditor::Init()
 {
 	DefaultParameters();
+
+	// Default rendering mode will use depth buffer
+	glDepthMask(GL_TRUE);
+	glEnable(GL_DEPTH_TEST);
+
+	// Init frame buffer
+	glm::vec2 resolution = window->GetResolution();
+	frameBuffer = std::unique_ptr<FrameBuffer>(new FrameBuffer());
+	frameBuffer->Generate(resolution.x, resolution.y, 2);
 
 	// Camera setup --------------------------------------------------------------
 	camera = std::unique_ptr<EngineComponents::Camera>(new EngineComponents::Camera());
@@ -45,21 +56,19 @@ void RiverEditor::Init()
 	camera->Update();
 
 	// Control points ------------------------------------------------------------
-	float step = aspectRatio.y / controlPointsCount;
-	for (int i = 0; i < controlPointsCount; i++)
-	{
-		controlPoints.push_back(glm::vec3(0.0f, - aspectRatio.y / 2 + i * step + step / 2, 0.0f));
-	}
+	controlPoints.push_back(glm::vec3(-aspectRatio.x / 2.0f + 1.0f, 0.0f, 0.0f));
+	controlPoints.push_back(glm::vec3(0.0f, aspectRatio.y / 2.0f - 1.0f, 0.0f));
+	controlPoints.push_back(glm::vec3(0.0f, -aspectRatio.y / 2.0f + 1.0f, 0.0f));
+	controlPoints.push_back(glm::vec3(aspectRatio.x / 2.0f - 1.0f, 0.0f, 0.0f));
 
 	// Quad mesh -----------------------------------------------------------------
 	{
 		std::vector<VertexFormat> vertices =
 		{
-			VertexFormat(glm::vec3(-1, 1, 0), glm::vec3(0, 1, 0)),
-			VertexFormat(glm::vec3(1, 1, 0), glm::vec3(0, 1, 0)),
-			VertexFormat(glm::vec3(1, -1, 0), glm::vec3(0, 1, 0)),
-			VertexFormat(glm::vec3(-1, -1, 0), glm::vec3(0, 1, 0))
-
+			VertexFormat(glm::vec3(-0.5, 0.5, 0), glm::vec3(0, 1, 0), glm::vec3(0, 1, 0), glm::vec2(0.0f, 1.0f)),
+			VertexFormat(glm::vec3(0.5, 0.5, 0), glm::vec3(0, 1, 0), glm::vec3(0, 1, 0), glm::vec2(1.0f, 1.0f)),
+			VertexFormat(glm::vec3(0.5, -0.5, 0), glm::vec3(0, 1, 0), glm::vec3(0, 1, 0), glm::vec2(1.0f, 0.0f)),
+			VertexFormat(glm::vec3(-0.5, -0.5, 0), glm::vec3(0, 1, 0), glm::vec3(0, 1, 0), glm::vec2(0.0f, 0.0f))
 		};
 
 		std::vector<unsigned short> indices =
@@ -93,8 +102,8 @@ void RiverEditor::Init()
 	// Default Shader ------------------------------------------------------------
 	{
 		Shader *shader = new Shader("Simple");
-		shader->AddShader(RESOURCE_PATH::SHADERS + "MVP.Texture.VS.glsl", GL_VERTEX_SHADER);
-		shader->AddShader(RESOURCE_PATH::SHADERS + "Default.FS.glsl", GL_FRAGMENT_SHADER);
+		shader->AddShader(RESOURCE_PATH::SHADERS + "RiverEditor/Simple.VS.glsl", GL_VERTEX_SHADER);
+		shader->AddShader(RESOURCE_PATH::SHADERS + "RiverEditor/Simple.FS.glsl", GL_FRAGMENT_SHADER);
 		shader->CreateAndLink();
 		shaders[shader->GetName()] = std::shared_ptr<Shader>(shader);
 	}
@@ -119,67 +128,111 @@ void RiverEditor::Init()
 		shaders[shader->GetName()] = std::shared_ptr<Shader>(shader);
 	}
 
+	// Bloom Shader --------------------------------------------------------------
+	{
+		Shader *shader = new Shader("Bloom");
+		shader->AddShader(RESOURCE_PATH::SHADERS + "RiverEditor/Simple.VS.glsl", GL_VERTEX_SHADER);
+		shader->AddShader(RESOURCE_PATH::SHADERS + "RiverEditor/Bloom.FS.glsl", GL_FRAGMENT_SHADER);
+		shader->CreateAndLink();
+		shaders[shader->GetName()] = std::shared_ptr<Shader>(shader);
+		postProcessFX.push_back(shader->GetName());
+	}
+
+	// Blur Shader ---------------------------------------------------------------
+	{
+		Shader *shader = new Shader("Blur");
+		shader->AddShader(RESOURCE_PATH::SHADERS + "RiverEditor/Simple.VS.glsl", GL_VERTEX_SHADER);
+		shader->AddShader(RESOURCE_PATH::SHADERS + "RiverEditor/Blur.FS.glsl", GL_FRAGMENT_SHADER);
+		shader->CreateAndLink();
+		shaders[shader->GetName()] = std::shared_ptr<Shader>(shader);
+		postProcessFX.push_back(shader->GetName());
+	}
+
+	// Wave Shader ---------------------------------------------------------------
+	{
+		Shader *shader = new Shader("Wave");
+		shader->AddShader(RESOURCE_PATH::SHADERS + "RiverEditor/Simple.VS.glsl", GL_VERTEX_SHADER);
+		shader->AddShader(RESOURCE_PATH::SHADERS + "RiverEditor/Wave.FS.glsl", GL_FRAGMENT_SHADER);
+		shader->CreateAndLink();
+		shaders[shader->GetName()] = std::shared_ptr<Shader>(shader);
+		postProcessFX.push_back(shader->GetName());
+	}
+
 	// Water Texture -------------------------------------------------------------
 	TextureManager::LoadTexture(RESOURCE_PATH::TEXTURES + "RiverEditor", "water.png", "water");
+
+	// Particle Texture ----------------------------------------------------------
 	TextureManager::LoadTexture(RESOURCE_PATH::TEXTURES, "particle.png", "water_splash");
+
+	// Control Point Texture -----------------------------------------------------
+	TextureManager::LoadTexture(RESOURCE_PATH::TEXTURES + "RiverEditor", "test.png", "button");
+
+	// Background Texture ----------------------------------------------------------
+	TextureManager::LoadTexture(RESOURCE_PATH::TEXTURES + "RiverEditor", "RockCliff.png", "background");
 
 	// Particle Effect -----------------------------------------------------------
 	splashEffect = std::unique_ptr< ParticleEffect<Particle> >(new ParticleEffect<Particle>());
+	splashEffect->particleTexture = TextureManager::GetTexture("water_splash");
+	splashEffect->fallSpeed = particleFallSpeed;
+	splashEffect->decayRadius = riverWidth / 2;
+	splashEffect->particleSize = riverWidth / 10;
 	UpdateVFX();
+
+	// PostProcessing stuff ------------------------------------------------------
+	currentEffect = 0;
 }
 
 void RiverEditor::FrameStart()
 {
+	if (postProcessOn)
+	{
+		frameBuffer->Bind();
+	}
 	ClearScreen();
 }
 
 void RiverEditor::Update(float deltaTimeSeconds)
 {
+	glm::vec3 planeOffset = glm::vec3(0.0f, 0.0f, 0.1f);
+
 	// Render control points gizmos
-	glm::vec3 controlPointScale = glm::vec3(clickDistanceThreshold / sqrt(2.0f));
+	glm::vec3 controlPointScale = glm::vec3(clickDistanceThreshold * 2.0 / sqrt(2.0f));
+	Texture2D *texture = TextureManager::GetTexture("button");
 	for (auto &point : controlPoints)
 	{
-		RenderMesh(meshes["quad"], shaders["Simple"], point + glm::vec3(0, 0, 2), controlPointScale);
+		RenderMesh(meshes["quad"], shaders["Simple"], texture, point + planeOffset, controlPointScale);
 	}
+
+	// Render background
+	texture = TextureManager::GetTexture("background");
+	RenderMesh(meshes["quad"], shaders["Simple"], texture, -planeOffset, glm::vec3(aspectRatio.x, aspectRatio.y, 0.0f));
 
 	// Render river curve
 	RenderRiver(TextureManager::GetTexture("water"));
 
-	// Render river vfx
-	//RenderVFX(splashEffect, shaders["Particle"], GetBezierPoint(animationSpeed * 0.5f), glm::vec3(1));
+	// Render river vfx depending on the speed
+	if (animationSpeed > 0.0f)
+	{
+		// Small offset so we keep vfx bounded in the river
+		float offset = 0.025f;
+
+		for (float t = offset; t <= 1; t += 1.0 / animationSpeed)
+			RenderVFX(splashEffect, shaders["Particle"], GetBezierPoint(t), deltaTimeSeconds);
+	}
 }
 
 void RiverEditor::FrameEnd()
 {
-}
-
-void RiverEditor::UpdateVFX()
-{
-	unsigned int nrParticles = 10 * abs(animationSpeed);
-	splashEffect->Generate(nrParticles, true);
-
-	auto particleSSBO = splashEffect->GetParticleBuffer();
-	Particle* data = const_cast<Particle*>(particleSSBO->GetBuffer());
-
-	for (unsigned int i = 0; i < nrParticles; i++)
+	if (postProcessOn)
 	{
-		glm::vec4 pos(1);
-		pos.x = RandFloat(-0.5f, 0.5f);
-		pos.y = RandFloat(0.0f, 1.0f);
-		pos.z = 0.0f;
+		FrameBuffer::BindDefault();
+		ClearScreen();
 
-		glm::vec4 speed(0);
-		speed.x = RandFloat(-0.125f, 0.125f);
-		speed.z = 0.0f;
-		speed.y = RandFloat(0.0f, 0.25f);
-
-		data[i].SetInitial(pos, speed);
+		ApplyPostProcessing(shaders[postProcessFX[currentEffect]]);
 	}
-	particleSSBO->SetBufferData(data);
-
 }
 
-void RiverEditor::RenderMesh(std::shared_ptr<Mesh> &mesh, std::shared_ptr<Shader> &shader, 
+void RiverEditor::RenderMesh(std::shared_ptr<Mesh> &mesh, std::shared_ptr<Shader> &shader, Texture2D *texture,
 									const glm::vec3 &position, const glm::vec3 &scale)
 {
 	if (!mesh || !shader || !shader->program)
@@ -199,8 +252,23 @@ void RiverEditor::RenderMesh(std::shared_ptr<Mesh> &mesh, std::shared_ptr<Shader
 	glUniformMatrix4fv(shader->loc_view_matrix, 1, GL_FALSE, glm::value_ptr(camera->GetViewMatrix()));
 	glUniformMatrix4fv(shader->loc_projection_matrix, 1, GL_FALSE, glm::value_ptr(camera->GetProjectionMatrix()));
 
+	// Apply textures if needed
+	if (texture)
+	{
+		mesh->UseMaterials(false);
+		texture->BindToTextureUnit(GL_TEXTURE0);
+		glUniform1i(shader->loc_textures[0], 0);
+	}
+	else
+	{
+		mesh->UseMaterials(true);
+	}
+
 	// Render mesh with textures
 	mesh->Render();
+
+	if (texture)
+		texture->UnBind();
 }
 
 void RiverEditor::RenderRiver(Texture2D *texture)
@@ -256,7 +324,7 @@ void RiverEditor::RenderRiver(Texture2D *texture)
 }
 
 void RiverEditor::RenderVFX(std::unique_ptr< ParticleEffect<Particle> > &effect, std::shared_ptr<Shader> &shader,
-								const glm::vec3 &position, const glm::vec3 &scale)
+								const glm::vec3 &position, float deltaTime)
 {
 	if (!effect || !shader || !shader->program)
 		return;
@@ -267,16 +335,74 @@ void RiverEditor::RenderVFX(std::unique_ptr< ParticleEffect<Particle> > &effect,
 	glBlendFunc(GL_ONE, GL_ONE);
 	glBlendEquation(GL_FUNC_ADD);
 
-	shader->Use();
-
+	// Modify the effect's transform and then Render it 
 	effect->source->SetWorldPosition(position);
-	effect->source->SetScale(scale);
+	effect->Render(camera.get(), shader.get(), deltaTime);
 
-	TextureManager::GetTexture("water_splash")->BindToTextureUnit(GL_TEXTURE0);
-	effect->Render(camera.get(), shader.get());
-
+	// Stop da magic
 	glEnable(GL_DEPTH_TEST);
 	glDisable(GL_BLEND);
+}
+
+void RiverEditor::ApplyPostProcessing(std::shared_ptr<Shader> &shader)
+{
+	if (!shader || !shader->program)
+		return;
+
+	shader->Use();
+
+	// Send screen resolution to shader
+	int loc = glGetUniformLocation(shader->program, "screen_size");
+	glUniform2iv(loc, 1, glm::value_ptr(window->GetResolution()));
+
+	// Send time to shader
+	loc = glGetUniformLocation(shader->program, "time");
+	glUniform1f(loc, Engine::GetElapsedTime());
+
+	// Other params
+	loc = glGetUniformLocation(shader->program, "frequency");
+	glUniform1f(loc, waveEffectFrequency);
+
+	// Send the secondary textures to GPU
+	Texture2D *texture = frameBuffer->GetTexture(1);
+	texture->BindToTextureUnit(GL_TEXTURE1);
+	glUniform1i(shader->loc_textures[1], 1);
+
+	// Render the quad
+	texture = frameBuffer->GetTexture(0);
+	RenderMesh(meshes["quad"], shader, texture, glm::vec3(0), glm::vec3(aspectRatio.x, aspectRatio.y, 0.0f));
+
+	// Unbind secondary textures
+	frameBuffer->GetTexture(1)->UnBind();
+}
+
+void RiverEditor::UpdateVFX()
+{
+	unsigned int nrParticles = 100 * riverWidth;
+	splashEffect->Generate(nrParticles, true);
+	splashEffect->particleSize = riverWidth / 10;
+	splashEffect->decayRadius = riverWidth / 2;
+
+	auto particleSSBO = splashEffect->GetParticleBuffer();
+	Particle* data = const_cast<Particle*>(particleSSBO->GetBuffer());
+
+	// Reset particle values
+	for (unsigned int i = 0; i < nrParticles; i++)
+	{
+		glm::vec4 pos(1);
+		glm::vec2 randPos = Utils::RandInsideUnitCircle();
+		pos.x = riverWidth / 2 * randPos.x;
+		pos.y = riverWidth / 2 * randPos.y;
+		pos.z = 0.0f;
+
+		glm::vec4 speed(0);
+		speed.x = Utils::RandFloat(-riverWidth / 2, riverWidth / 2);
+		speed.y = Utils::RandFloat(0.0f, animationSpeed);
+		speed.z = 0.0f;
+
+		data[i].SetInitial(pos, speed);
+	}
+	particleSSBO->SetBufferData(data);
 }
 
 void RiverEditor::ClearScreen()
@@ -334,10 +460,12 @@ void RiverEditor::OnInputUpdate(float deltaTime, int mods)
 	if (window->KeyHold(GLFW_KEY_T))
 	{
 		riverWidth += smoothness * deltaTime;
+		UpdateVFX();
 	}
 	if (window->KeyHold(GLFW_KEY_R))
 	{
 		riverWidth -= smoothness * deltaTime;
+		UpdateVFX();
 	}
 
 	// Tiling Factor
@@ -354,15 +482,38 @@ void RiverEditor::OnInputUpdate(float deltaTime, int mods)
 void RiverEditor::OnKeyPress(int key, int mods)
 {
 	// Animation Speed
-	if (window->KeyHold(GLFW_KEY_KP_ADD))
+	if (key == GLFW_KEY_KP_ADD)
 	{
 		animationSpeed += smoothness;
+		animationSpeed = animationSpeed > maxAnimationSpeed ? maxAnimationSpeed : animationSpeed;
 		UpdateVFX();
 	}
-	if (window->KeyHold(GLFW_KEY_KP_SUBTRACT))
+	if (key == GLFW_KEY_KP_SUBTRACT)
 	{
 		animationSpeed -= smoothness;
+		animationSpeed = animationSpeed < 0.0f ? 0.0f : animationSpeed;
 		UpdateVFX();
+	}
+
+	// Post Processing
+	if (key == GLFW_KEY_SPACE)
+	{
+		if (postProcessOn)
+		{
+			if (postProcessFX.size() - 1 == currentEffect)
+			{
+				postProcessOn = !postProcessOn;
+				currentEffect = 0;
+			}
+			else
+			{
+				currentEffect++;
+			}
+		}
+		else
+		{
+			postProcessOn = !postProcessOn;
+		}
 	}
 }
 
@@ -382,6 +533,7 @@ void RiverEditor::OnMouseBtnPress(int mouseX, int mouseY, int button, int mods)
 	{
 		glm::vec3 mousePos = ScreenToWorldSpace(mouseX, mouseY);
 
+		// Select the nearest control point
 		for (int i = 0; i < controlPointsCount; i++)
 		{
 			if (glm::length(mousePos - controlPoints[i]) < clickDistanceThreshold)

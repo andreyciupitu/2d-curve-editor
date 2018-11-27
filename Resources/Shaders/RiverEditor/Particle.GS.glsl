@@ -6,6 +6,8 @@ uniform mat4 View;
 uniform mat4 Projection;
 uniform vec3 eye_position;
 
+uniform float particle_size;
+
 layout(location = 0) out vec2 texture_coord;
 
 vec3 vpos = gl_in[0].gl_Position.xyz;
@@ -22,7 +24,7 @@ void EmitPoint(vec2 offset)
 
 void main()
 {
-	float ds = 0.1;
+	float ds = particle_size;
 
 	texture_coord = vec2(0, 0);
 	EmitPoint(vec2(-ds, -ds));

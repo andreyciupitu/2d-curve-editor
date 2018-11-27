@@ -77,14 +77,19 @@
     <ClInclude Include="..\Source\Laboratoare\Laborator7\Laborator7.h" />
     <ClInclude Include="..\Source\RiverEditor\RiverEditor.h" />
     <ClInclude Include="..\Source\RiverEditor\Particle.h" />
+    <ClInclude Include="..\Source\RiverEditor\Utils.h" />
   </ItemGroup>
   <ItemGroup>
     <None Include="..\Resources\Shaders\RiverEditor\Bezier.GS.glsl" />
+    <None Include="..\Resources\Shaders\RiverEditor\Bloom.FS.glsl" />
+    <None Include="..\Resources\Shaders\RiverEditor\Blur.FS.glsl" />
+    <None Include="..\Resources\Shaders\RiverEditor\Simple.VS.glsl" />
     <None Include="..\Resources\Shaders\RiverEditor\Particle.FS.glsl" />
     <None Include="..\Resources\Shaders\RiverEditor\Particle.GS.glsl" />
     <None Include="..\Resources\Shaders\RiverEditor\Particle.VS.glsl" />
     <None Include="..\Resources\Shaders\RiverEditor\Pass.VS.glsl" />
     <None Include="..\Resources\Shaders\RiverEditor\Simple.FS.glsl" />
+    <None Include="..\Resources\Shaders\RiverEditor\Wave.FS.glsl" />
     <None Include="..\Source\Laboratoare\Laborator1\Shaders\FragmentShader.glsl" />
     <None Include="..\Source\Laboratoare\Laborator1\Shaders\GeometryShader.glsl" />
     <None Include="..\Source\Laboratoare\Laborator1\Shaders\VertexShader.glsl" />

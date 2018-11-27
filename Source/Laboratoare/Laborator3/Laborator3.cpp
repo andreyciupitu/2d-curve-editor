@@ -55,7 +55,8 @@ void Laborator3::Init()
 
 
 	//TODO - create a new framebuffer and generate attached textures
-
+	frameBuffer = new FrameBuffer();
+	frameBuffer->Generate(resolution.x, resolution.y, 1, false);
 }
 
 void Laborator3::FrameStart()
@@ -70,6 +71,7 @@ void Laborator3::Update(float deltaTimeSeconds)
 
 	angle += 0.5f * deltaTimeSeconds;
 
+	frameBuffer->Bind();
 	ClearScreen();
 	
 	// Save camera position and rotation
@@ -81,8 +83,15 @@ void Laborator3::Update(float deltaTimeSeconds)
 	//TODO - Render scene view from the mirror point of view
 	// Use camera->SetPosition() and camera->SetRotation(glm::quat(euler_angles)) 
 	{
+		camera->SetPosition(mirrorPos);
+		camera->SetRotation(mirrorRotation);
 
+		DrawScene();
 	}
+
+	FrameBuffer::BindDefault();
+
+	ClearScreen();
 
 	// Render the scene normaly
 	{
@@ -97,6 +106,8 @@ void Laborator3::Update(float deltaTimeSeconds)
 		auto shader = shaders["ShaderLab3"];
 		// TODO - Use mirror texture
 		
+		frameBuffer->BindTexture(0, GL_TEXTURE0);
+
 		glm::mat4 modelMatrix(1);
 		modelMatrix = glm::translate(modelMatrix, mirrorPos);
 		modelMatrix = glm::scale(modelMatrix, glm::vec3(4));

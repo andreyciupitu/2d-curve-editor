@@ -7,6 +7,10 @@ layout(location = 2) in vec2 v_texture_coord;
 // Uniform properties
 uniform mat4 Model;
 
+uniform float delta_time;
+uniform vec3 fall_speed;
+uniform float decay_radius;
+
 struct Particle
 {
 	vec4 position;
@@ -19,6 +23,7 @@ layout(std430, binding = 0) buffer particles {
 	Particle data[];
 };
 
+// Rand in [0, 1)
 float rand(vec2 co)
 {
 	return fract(sin(dot(co.xy ,vec2(12.9898,78.233))) * 43758.5453);
@@ -29,17 +34,20 @@ void main()
 	vec3 pos = data[gl_VertexID].position.xyz;
 	vec3 spd = data[gl_VertexID].speed.xyz;
 
-	float dt = 0.1;
+	pos = pos + spd * delta_time + fall_speed * delta_time * delta_time/2.0f;
+	spd = spd + fall_speed * delta_time;
 
-	pos = pos + spd * dt + vec3(0, -0.1, 0) * dt * dt/2.0f ;
-	spd = spd + vec3(0, -0.1, 0) * dt;
-
-	if(pos.y < (-0.5f + rand(pos.xy) * 0.25f))
+	if(abs(pos.y) > (decay_radius + rand(pos.xy) * length(spd)))
 	{
 		pos = data[gl_VertexID].iposition.xyz;
 		spd = data[gl_VertexID].ispeed.xyz;
 	}
-
+	
+	if(abs(pos.x) > (decay_radius + rand(pos.xy) * length(spd)))
+	{
+		pos = data[gl_VertexID].iposition.xyz;
+		spd = data[gl_VertexID].ispeed.xyz;
+	}
 	data[gl_VertexID].position.xyz =  pos;
 	data[gl_VertexID].speed.xyz =  spd;
 

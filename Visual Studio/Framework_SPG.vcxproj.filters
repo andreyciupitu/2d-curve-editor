@@ -240,6 +240,9 @@
     <ClInclude Include="..\Source\RiverEditor\Particle.h">
       <Filter>RiverEditor</Filter>
     </ClInclude>
+    <ClInclude Include="..\Source\RiverEditor\Utils.h">
+      <Filter>RiverEditor</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <None Include="..\Source\Laboratoare\Laborator7\Shaders\FragmentShader.glsl">
@@ -342,6 +345,18 @@
       <Filter>RiverEditor\Shaders</Filter>
     </None>
     <None Include="..\Resources\Shaders\RiverEditor\Particle.VS.glsl">
+      <Filter>RiverEditor\Shaders</Filter>
+    </None>
+    <None Include="..\Resources\Shaders\RiverEditor\Simple.VS.glsl">
+      <Filter>RiverEditor\Shaders</Filter>
+    </None>
+    <None Include="..\Resources\Shaders\RiverEditor\Bloom.FS.glsl">
+      <Filter>RiverEditor\Shaders</Filter>
+    </None>
+    <None Include="..\Resources\Shaders\RiverEditor\Blur.FS.glsl">
+      <Filter>RiverEditor\Shaders</Filter>
+    </None>
+    <None Include="..\Resources\Shaders\RiverEditor\Wave.FS.glsl">
       <Filter>RiverEditor\Shaders</Filter>
     </None>
   </ItemGroup>

@@ -6,7 +6,6 @@ using namespace std;
 #include <Core/Engine.h>
 
 #include <RiverEditor\RiverEditor.h>
-#include <Laboratoare\LabList.h>
 
 int main(int argc, char **argv)
 {

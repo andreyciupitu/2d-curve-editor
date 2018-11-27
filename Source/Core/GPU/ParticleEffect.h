@@ -24,6 +24,7 @@ class ParticleEffect
 		virtual void Generate(unsigned int particleCount, bool createLocalBuffer = false);
 		virtual void FillRandomData(std::function<T(void)> generator);
 		virtual void Render(Camera *camera, Shader *shader, unsigned int nrParticles = -1);
+		virtual void Render(Camera *camera, Shader *shader, float deltaTime, unsigned int nrParticles = -1);
 
 		virtual SSBO<T>* GetParticleBuffer() const
 		{
@@ -37,6 +38,10 @@ class ParticleEffect
 
 	public:
 		Transform * source;
+		float decayRadius;
+		float particleSize;
+		glm::vec3 fallSpeed;
+		Texture2D *particleTexture;
 
 	protected:
 		unsigned int particleCount;
@@ -75,6 +80,42 @@ void ParticleEffect<T>::Render(Camera *camera, Shader *shader, unsigned int nrPa
 	// Render Particles
 	glBindVertexArray(VAO);
 	glDrawElements(GL_POINTS, MIN(particleCount, nrParticles), GL_UNSIGNED_INT, 0);
+	glBindVertexArray(0);
+}
+
+template <class T>
+void ParticleEffect<T>::Render(Camera *camera, Shader *shader, float deltaTime, unsigned int nrParticles)
+{
+	if (!shader || !shader->program)
+		return;
+
+	shader->Use();
+
+	// Send frame time to shader
+	int loc = glGetUniformLocation(shader->program, "delta_time");
+	glUniform1f(loc, deltaTime);
+
+	// Send effect specific parameters
+	loc = glGetUniformLocation(shader->program, "decay_radius");
+	glUniform1f(loc, decayRadius);
+	loc = glGetUniformLocation(shader->program, "particle_size");
+	glUniform1f(loc, particleSize);
+	loc = glGetUniformLocation(shader->program, "fall_speed");
+	glUniform3fv(loc, 1, glm::value_ptr(fallSpeed));
+
+	if (particleTexture)
+	{
+		particleTexture->BindToTextureUnit(GL_TEXTURE0);
+		glUniform1i(shader->loc_textures[0], 0);
+	}
+	
+	Render(camera, shader, nrParticles);
+
+	// Unbind texture
+	if (particleTexture)
+	{
+		particleTexture->UnBind();
+	}
 }
 
 template <class T>
