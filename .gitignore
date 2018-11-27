@@ -1,32 +1,18 @@
-# Prerequisites
-*.d
+# General
+/*
+!.gitignore
 
-# Compiled Object files
-*.slo
-*.lo
-*.o
-*.obj
+!/Visual Studio
+/Visual Studio/*
+!/Visual Studio/Property Sheets
+!/Visual Studio/*.sln
+!/Visual Studio/*.vcxproj
+!/Visual Studio/*.vcxproj.user
+!/Visual Studio/*.vcxproj.filters
+!/Visual Studio/scripts/
 
-# Precompiled Headers
-*.gch
-*.pch
+# Application
 
-# Compiled Dynamic libraries
-*.so
-*.dylib
-*.dll
-
-# Fortran module files
-*.mod
-*.smod
-
-# Compiled Static libraries
-*.lai
-*.la
-*.a
-*.lib
-
-# Executables
-*.exe
-*.out
-*.app
+!/libs
+!/Resources
+!/Source

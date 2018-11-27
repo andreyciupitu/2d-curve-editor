@@ -1,2 +1,2 @@
-# tema1-spg
-River editor using bezier curves in OpenGL
+# SPG-Framework
+Laboratory framework for SPG
