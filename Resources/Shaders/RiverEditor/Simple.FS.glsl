@@ -23,7 +23,7 @@ void main()
 	float brightness = dot(out_color.rgb, magic_stuff);
 
 	// Store the values above the threshold in the second buffer
-    if(brightness > 0.8f)
+    if(brightness > 0.7f)
         bright_color = out_color;
     else
         bright_color = vec4(0.0, 0.0, 0.0, 1.0);
